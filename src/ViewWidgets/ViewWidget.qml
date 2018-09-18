@@ -1,9 +1,11 @@
-import QtQuick 2.5
+import QtQuick 2.3
 import QtQuick.Controls 1.2
-import QtQuick.Controls.Styles 1.2
+import QtQuick.Controls.Styles 1.4
 
-import QGroundControl.Palette 1.0
-import QGroundControl.Controllers 1.0
+import QGroundControl               1.0
+import QGroundControl.Controls      1.0
+import QGroundControl.Controllers   1.0
+import QGroundControl.Palette       1.0
 
 Rectangle {
     property Component connectedComponent: __componentConnected
@@ -56,7 +58,7 @@ Rectangle {
                 horizontalAlignment:	Text.AlignHCenter
                 verticalAlignment:		Text.AlignVCenter
 
-                text: "missing connected implementation"
+                text: qsTr("missing connected implementation")
             }
         }
     }
@@ -76,7 +78,7 @@ Rectangle {
                 horizontalAlignment:	Text.AlignHCenter
                 verticalAlignment:		Text.AlignVCenter
 
-                text: "no vehicle connected"
+                text: qsTr("no vehicle connected")
             }
         }
     }

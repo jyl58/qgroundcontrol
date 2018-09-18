@@ -1,25 +1,12 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
- QGroundControl Open Source Ground Control Station
-
- (c) 2009 - 2015 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
- This file is part of the QGROUNDCONTROL project
-
- QGROUNDCONTROL is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
-
- QGROUNDCONTROL is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-
- You should have received a copy of the GNU General Public License
- along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
- ======================================================================*/
 
 #ifndef LogReplayLink_H
 #define LogReplayLink_H
@@ -53,7 +40,6 @@ public:
     void        loadSettings            (QSettings& settings, const QString& root);
     void        saveSettings            (QSettings& settings, const QString& root);
     void        updateSettings          ();
-    bool        isAutoConnectAllowed    () { return false; }
     QString     settingsURL             () { return "LogReplaySettings.qml"; }
 signals:
     void fileNameChanged();
@@ -108,6 +94,7 @@ signals:
     void playbackAtEnd(void);
     void playbackError(void);
     void playbackPercentCompleteChanged(int percentComplete);
+    void currentLogTimeSecs(int secs);
 
     // Internal signals
     void _playOnThread(void);
@@ -122,12 +109,13 @@ private slots:
 
 private:
     // Links are only created/destroyed by LinkManager so constructor/destructor is not public
-    LogReplayLink(LogReplayLinkConfiguration* config);
+    LogReplayLink(SharedLinkConfigurationPointer& config);
     ~LogReplayLink();
 
     void _replayError(const QString& errorMsg);
     quint64 _parseTimestamp(const QByteArray& bytes);
     quint64 _seekToNextMavlinkMessage(mavlink_message_t* nextMsg);
+    quint64 _readNextMavlinkMessage(QByteArray& bytes);
     bool _loadLogFile(void);
     void _finishPlayback(void);
     void _playbackError(void);
@@ -140,12 +128,13 @@ private:
     // Virtuals from QThread
     virtual void run(void);
 
-    LogReplayLinkConfiguration* _config;
+    LogReplayLinkConfiguration* _logReplayConfig;
 
     bool    _connected;
-    QTimer _readTickTimer;      ///< Timer which signals a read of next log record
+    int     _mavlinkChannel;
+    QTimer  _readTickTimer;      ///< Timer which signals a read of next log record
 
-    static const char* _errorTitle; ///< Title for communicatorError signals
+    QString _errorTitle; ///< Title for communicatorError signals
 
     quint64 _logCurrentTimeUSecs;   ///< The timestamp of the next message in the log file.
     quint64 _logStartTimeUSecs;     ///< The first timestamp in the current log file.

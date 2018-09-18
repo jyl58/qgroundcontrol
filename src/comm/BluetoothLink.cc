@@ -1,25 +1,12 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-QGroundControl Open Source Ground Control Station
-
-(c) 2009 - 2015 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
-This file is part of the QGROUNDCONTROL project
-
-    QGROUNDCONTROL is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    QGROUNDCONTROL is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
-======================================================================*/
 
 /**
  * @file
@@ -42,24 +29,21 @@ This file is part of the QGROUNDCONTROL project
 #include "BluetoothLink.h"
 #include "QGC.h"
 
-BluetoothLink::BluetoothLink(BluetoothConfiguration* config)
-    : _connectState(false)
+BluetoothLink::BluetoothLink(SharedLinkConfigurationPointer& config)
+    : LinkInterface(config)
+    , _config(qobject_cast<BluetoothConfiguration*>(config.data()))
+    , _connectState(false)
     , _targetSocket(NULL)
 #ifdef __ios__
     , _discoveryAgent(NULL)
 #endif
     , _shutDown(false)
 {
-    Q_ASSERT(config != NULL);
-    _config = config;
-    _config->setLink(this);
-    //moveToThread(this);
+
 }
 
 BluetoothLink::~BluetoothLink()
 {
-    // Disconnect link from configuration
-    _config->setLink(NULL);
     _disconnect();
 #ifdef __ios__
     if(_discoveryAgent) {
@@ -91,30 +75,25 @@ QString BluetoothLink::getName() const
 
 void BluetoothLink::_writeBytes(const QByteArray bytes)
 {
-    if(_targetSocket)
-    {
-        if(_targetSocket->isWritable())
-        {
-            if(_targetSocket->write(bytes) > 0) {
-                _logOutputDataRate(bytes.size(), QDateTime::currentMSecsSinceEpoch());
-            }
-            else
-                qWarning() << "Bluetooth write error";
+    if (_targetSocket) {
+        if(_targetSocket->write(bytes) > 0) {
+            _logOutputDataRate(bytes.size(), QDateTime::currentMSecsSinceEpoch());
+        } else {
+            qWarning() << "Bluetooth write error";
         }
-        else
-            qWarning() << "Bluetooth not writable error";
     }
 }
 
 void BluetoothLink::readBytes()
 {
-    while (_targetSocket->bytesAvailable() > 0)
-    {
-        QByteArray datagram;
-        datagram.resize(_targetSocket->bytesAvailable());
-        _targetSocket->read(datagram.data(), datagram.size());
-        emit bytesReceived(this, datagram);
-        _logInputDataRate(datagram.length(), QDateTime::currentMSecsSinceEpoch());
+    if (_targetSocket) {
+        while (_targetSocket->bytesAvailable() > 0) {
+            QByteArray datagram;
+            datagram.resize(_targetSocket->bytesAvailable());
+            _targetSocket->read(datagram.data(), datagram.size());
+            emit bytesReceived(this, datagram);
+            _logInputDataRate(datagram.length(), QDateTime::currentMSecsSinceEpoch());
+        }
     }
 }
 
@@ -130,7 +109,7 @@ void BluetoothLink::_disconnect(void)
 #endif
     if(_targetSocket)
     {
-        delete _targetSocket;
+        _targetSocket->deleteLater();
         _targetSocket = NULL;
         emit disconnected();
     }
@@ -156,14 +135,11 @@ bool BluetoothLink::_hardwareConnect()
     QObject::connect(_discoveryAgent, &QBluetoothServiceDiscoveryAgent::serviceDiscovered, this, &BluetoothLink::serviceDiscovered);
     QObject::connect(_discoveryAgent, &QBluetoothServiceDiscoveryAgent::finished, this, &BluetoothLink::discoveryFinished);
     QObject::connect(_discoveryAgent, &QBluetoothServiceDiscoveryAgent::canceled, this, &BluetoothLink::discoveryFinished);
-
-    QObject::connect(_discoveryAgent, static_cast<void (QBluetoothServiceDiscoveryAgent::*)(QBluetoothSocket::SocketError)>(&QBluetoothServiceDiscoveryAgent::error),
-            this, &BluetoothLink::discoveryError);
     _shutDown = false;
     _discoveryAgent->start();
 #else
     _createSocket();
-    _targetSocket->connectToService(QBluetoothAddress(_config->device().address), QBluetoothUuid(QBluetoothUuid::Rfcomm));
+    _targetSocket->connectToService(QBluetoothAddress(_config->device().address), QBluetoothUuid(QBluetoothUuid::SerialPort));
 #endif
     return true;
 }
@@ -184,14 +160,6 @@ void BluetoothLink::_createSocket()
     QObject::connect(_targetSocket, static_cast<void (QBluetoothSocket::*)(QBluetoothSocket::SocketError)>(&QBluetoothSocket::error),
             this, &BluetoothLink::deviceError);
 }
-
-#ifdef __ios__
-void BluetoothLink::discoveryError(QBluetoothServiceDiscoveryAgent::Error error)
-{
-    qDebug() << "Discovery error:" << error;
-    qDebug() << _discoveryAgent->errorString();
-}
-#endif
 
 #ifdef __ios__
 void BluetoothLink::serviceDiscovered(const QBluetoothServiceInfo& info)
@@ -240,7 +208,7 @@ void BluetoothLink::deviceError(QBluetoothSocket::SocketError error)
 {
     _connectState = false;
     qWarning() << "Bluetooth error" << error;
-    emit communicationError("Bluetooth Link Error", _targetSocket->errorString());
+    emit communicationError(tr("Bluetooth Link Error"), _targetSocket->errorString());
 }
 
 bool BluetoothLink::isConnected() const
@@ -276,8 +244,8 @@ BluetoothConfiguration::BluetoothConfiguration(const QString& name)
 BluetoothConfiguration::BluetoothConfiguration(BluetoothConfiguration* source)
     : LinkConfiguration(source)
     , _deviceDiscover(NULL)
+    , _device(source->device())
 {
-    _device = source->device();
 }
 
 BluetoothConfiguration::~BluetoothConfiguration()
@@ -365,9 +333,17 @@ void BluetoothConfiguration::startScan()
 
 void BluetoothConfiguration::deviceDiscovered(QBluetoothDeviceInfo info)
 {
-    //print_device_info(info);
     if(!info.name().isEmpty() && info.isValid())
     {
+#if 0
+        qDebug() << "Name:           " << info.name();
+        qDebug() << "Address:        " << info.address().toString();
+        qDebug() << "Service Classes:" << info.serviceClasses();
+        QList<QBluetoothUuid> uuids = info.serviceUuids();
+        foreach (QBluetoothUuid uuid, uuids) {
+            qDebug() << "Service UUID:   " << uuid.toString();
+        }
+#endif
         BluetoothData data;
         data.name    = info.name();
 #ifdef __ios__

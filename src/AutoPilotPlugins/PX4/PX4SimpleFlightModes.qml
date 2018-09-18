@@ -1,28 +1,15 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
- QGroundControl Open Source Ground Control Station
-
- (c) 2009 - 2015 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
- This file is part of the QGROUNDCONTROL project
-
- QGROUNDCONTROL is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
-
- QGROUNDCONTROL is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-
- You should have received a copy of the GNU General Public License
- along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
- ======================================================================*/
-
-import QtQuick                  2.5
-import QtQuick.Controls         1.2
+import QtQuick          2.3
+import QtQuick.Controls 1.2
+import QtQuick.Layouts  1.2
 
 import QGroundControl.FactSystem    1.0
 import QGroundControl.FactControls  1.0
@@ -40,10 +27,8 @@ Item {
 
     property real _margins: ScreenTools.defaultFontPixelHeight / 2
 
-    readonly property real _flightModeComboWidth:   ScreenTools.defaultFontPixelWidth * 23
-    readonly property real _channelComboWidth:      ScreenTools.defaultFontPixelWidth * 20
-
-    QGCPalette { id: qgcPal; colorGroupEnabled: panel.enabled }
+    readonly property real _flightModeComboWidth:   ScreenTools.defaultFontPixelWidth * 13
+    readonly property real _channelComboWidth:      ScreenTools.defaultFontPixelWidth * 13
 
     PX4SimpleFlightModesController {
         id:         controller
@@ -53,11 +38,11 @@ Item {
     QGCFlickable {
         anchors.fill:   parent
         clip:           true
-        contentWidth:   contentColumn.width
-        contentHeight:  contentColumn.height
+        contentWidth:   column2.x + column2.width
+        contentHeight:  Math.max(column1.height, column2.height)
 
         Column {
-            id:         contentColumn
+            id:         column1
             spacing:    _margins
 
             Row {
@@ -70,8 +55,8 @@ Item {
 
                     QGCLabel {
                         id:             flightModeLabel
-                        text:           "Flight Mode Settings"
-                        font.weight:    Font.DemiBold
+                        text:           qsTr("Flight Mode Settings")
+                        font.family:    ScreenTools.demiboldFontFamily
                     }
 
                     Rectangle {
@@ -80,49 +65,48 @@ Item {
                         height:             flightModeColumn.height + ScreenTools.defaultFontPixelHeight
                         color:              qgcPal.windowShade
 
-                        Column {
+                        ColumnLayout {
                             id:                 flightModeColumn
                             anchors.margins:    ScreenTools.defaultFontPixelWidth
                             anchors.left:       parent.left
                             anchors.top:        parent.top
                             spacing:            ScreenTools.defaultFontPixelHeight
 
-                            Row {
-                                spacing: _margins
+                            RowLayout {
+                                Layout.fillWidth:   true
+                                spacing:            _margins
 
                                 QGCLabel {
-                                    id:                 modeChannelLabel
-                                    anchors.baseline:   modeChannelCombo.baseline
-                                    text:               "Flight mode channel:"
+                                    Layout.fillWidth:   true
+                                    text:               qsTr("Mode channel:")
                                 }
 
                                 FactComboBox {
-                                    id:         modeChannelCombo
-                                    width:      _channelComboWidth
-                                    fact:       controller.getParameterFact(-1, "RC_MAP_FLTMODE")
-                                    indexModel: false
+                                    Layout.preferredWidth:  _channelComboWidth
+                                    fact:                   controller.getParameterFact(-1, "RC_MAP_FLTMODE")
+                                    indexModel:             false
                                 }
                             }
 
                             Repeater {
                                 model:  6
 
-                                Row {
-                                    spacing: ScreenTools.defaultFontPixelWidth
+                                RowLayout {
+                                    Layout.fillWidth:   true
+                                    spacing:            ScreenTools.defaultFontPixelWidth
 
                                     property int index:         modelData + 1
 
                                     QGCLabel {
-                                        anchors.baseline:   modeCombo.baseline
-                                        text:               "Flight Mode " + index + ":"
+                                        Layout.fillWidth:   true
+                                        text:               qsTr("Flight Mode %1").arg(index)
                                         color:              controller.activeFlightMode == index ? "yellow" : qgcPal.text
                                     }
 
                                     FactComboBox {
-                                        id:         modeCombo
-                                        width:      _flightModeComboWidth
-                                        fact:       controller.getParameterFact(-1, "COM_FLTMODE" + index)
-                                        indexModel: false
+                                        Layout.preferredWidth:  _channelComboWidth
+                                        fact:                   controller.getParameterFact(-1, "COM_FLTMODE" + index)
+                                        indexModel:             false
                                     }
                                 }
                             } // Repeater - Flight Modes
@@ -131,49 +115,122 @@ Item {
                 } // Column - Flight mode settings
 
                 Column {
-                    spacing: _margins
+                    id:         column2
+                    spacing:    _margins
 
                     QGCLabel {
-                        text:           "Switch Settings"
-                        font.weight:    Font.DemiBold
+                        text:           qsTr("Switch Settings")
+                        font.family:    ScreenTools.demiboldFontFamily
                     }
 
                     Rectangle {
-                        width:  switchSettingsColumn.width + (_margins * 2)
-                        height: switchSettingsColumn.height + ScreenTools.defaultFontPixelHeight
+                        id:     switchSettingsRect
+                        width:  switchSettingsGrid.width + (_margins * 2)
+                        height: switchSettingsGrid.height + ScreenTools.defaultFontPixelHeight
                         color:  qgcPal.windowShade
 
-                        Column {
-                            id:                 switchSettingsColumn
+                        GridLayout {
+                            id:                 switchSettingsGrid
                             anchors.margins:    ScreenTools.defaultFontPixelWidth
                             anchors.left:       parent.left
                             anchors.top:        parent.top
-                            spacing:            ScreenTools.defaultFontPixelHeight
+                            columns:            2
+                            columnSpacing:      ScreenTools.defaultFontPixelWidth
 
                             Repeater {
-                                model: [ "RC_MAP_RETURN_SW", "RC_MAP_KILL_SW", "RC_MAP_OFFB_SW" ]
+                                model: [ "RC_MAP_ACRO_SW", "RC_MAP_ARM_SW", "RC_MAP_GEAR_SW", "RC_MAP_KILL_SW", "RC_MAP_LOITER_SW", "RC_MAP_OFFB_SW", "RC_MAP_POSCTL_SW", "RC_MAP_RATT_SW", "RC_MAP_RETURN_SW", "RC_MAP_STAB_SW" ]
 
-                                Row {
-                                    spacing: ScreenTools.defaultFontPixelWidth
+                                RowLayout {
+                                    spacing:            ScreenTools.defaultFontPixelWidth
+                                    Layout.fillWidth:   true
 
                                     property Fact fact: controller.getParameterFact(-1, modelData)
 
                                     QGCLabel {
-                                        anchors.baseline:   optCombo.baseline
-                                        text:               fact.shortDescription + ":"
-                                        color:              fact.value == 0 ? qgcPal.text : (controller.rcChannelValues[fact.value - 1] >= 1500 ? "yellow" : qgcPal.text)
+                                        text:               fact.shortDescription
+                                        Layout.fillWidth:   true
                                     }
 
                                     FactComboBox {
-                                        id:         optCombo
-                                        width:      _channelComboWidth
-                                        fact:       parent.fact
-                                        indexModel: false
+                                        Layout.preferredWidth:  _channelComboWidth
+                                        fact:                   parent.fact
+                                        indexModel:             false
                                     }
                                 }
-                            } // Repeater
+                            }
+
+                            Repeater {
+                                model: [ "RC_MAP_FLAPS", "RC_MAP_MAN_SW" ]
+
+                                RowLayout {
+                                    spacing:            ScreenTools.defaultFontPixelWidth
+                                    visible:            controller.vehicle.fixedWing
+                                    Layout.fillWidth:   true
+
+                                    property Fact fact: controller.getParameterFact(-1, modelData)
+
+                                    QGCLabel {
+                                        text:               fact.shortDescription
+                                        Layout.fillWidth:   true
+                                    }
+
+                                    FactComboBox {
+                                        Layout.preferredWidth:  _channelComboWidth
+                                        fact:                   parent.fact
+                                        indexModel:             false
+                                    }
+                                }
+                            }
+
+                            Repeater {
+                                model: [ "RC_MAP_TRANS_SW" ]
+
+                                RowLayout {
+                                    spacing:            ScreenTools.defaultFontPixelWidth
+                                    Layout.fillWidth:   true
+                                    visible:            controller.vehicle.vtol
+
+                                    property Fact fact: controller.getParameterFact(-1, modelData)
+
+                                    QGCLabel {
+                                        text:               fact.shortDescription
+                                        Layout.fillWidth:   true
+                                    }
+
+                                    FactComboBox {
+                                        Layout.preferredWidth:  _channelComboWidth
+                                        fact:                   parent.fact
+                                        indexModel:             false
+                                    }
+                                }
+                            }
+
+
+                            Row {
+                                spacing: ScreenTools.defaultFontPixelWidth
+
+                                property Fact fact: controller.getParameterFact(-1, "RC_MAP_TRANS_SW", false)
+                                visible: (controller.vehicle.vtol && controller.parameterExists(-1, "RC_MAP_TRANS_SW"))
+
+                                QGCLabel {
+                                    anchors.baseline:   vtolCombo.baseline
+                                    text:               qsTr("VTOL mode switch:")
+                                    color:              parent.fact.value === 0 ? qgcPal.text : (controller.rcChannelValues[parent.fact.value - 1] >= 1500 ? "yellow" : qgcPal.text)
+                                }
+
+                                FactComboBox {
+                                    id:         vtolCombo
+                                    width:      _channelComboWidth
+                                    fact:       parent.fact
+                                    indexModel: false
+                                }
+                            }
                         } // Column
                     } // Rectangle
+
+                    RCChannelMonitor {
+                        width: switchSettingsRect.width
+                    }
                 } // Column - Switch settings
             } // Row - Settings
 

@@ -1,27 +1,13 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
- QGroundControl Open Source Ground Control Station
-
- (c) 2009 - 2015 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
- This file is part of the QGROUNDCONTROL project
-
- QGROUNDCONTROL is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
-
- QGROUNDCONTROL is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-
- You should have received a copy of the GNU General Public License
- along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
- ======================================================================*/
-
-import QtQuick          2.5
+import QtQuick          2.3
 import QtQuick.Controls 1.2
 
 import QGroundControl.FactSystem    1.0
@@ -37,21 +23,40 @@ FactPanel {
     QGCPalette { id: qgcPal; colorGroupEnabled: enabled }
     FactPanelController { id: controller; factPanel: panel }
 
-    property Fact battCapacity: controller.getParameterFact(-1, "BATT_CAPACITY")
-    property Fact battMonitor:  controller.getParameterFact(-1, "BATT_MONITOR")
+    property Fact _batt1Monitor:            controller.getParameterFact(-1, "BATT_MONITOR")
+    property Fact _batt2Monitor:            controller.getParameterFact(-1, "BATT2_MONITOR", false /* reportMissing */)
+    property bool _batt2MonitorAvailable:   controller.parameterExists(-1, "BATT2_MONITOR")
+    property bool _batt1MonitorEnabled:     _batt1Monitor.rawValue !== 0
+    property bool _batt2MonitorEnabled:     _batt2MonitorAvailable && _batt2Monitor.rawValue !== 0
+
+    property Fact _battCapacity:            controller.getParameterFact(-1, "BATT_CAPACITY", false /* reportMissing */)
+    property Fact _batt2Capacity:           controller.getParameterFact(-1, "BATT2_CAPACITY", false /* reportMissing */)
+    property bool _battCapacityAvailable:   controller.parameterExists(-1, "BATT_CAPACITY")
 
     Column {
         anchors.fill:       parent
-        anchors.margins:    8
 
         VehicleSummaryRow {
-            labelText: "Battery monitor:"
-            valueText: battMonitor.enumStringValue
+            labelText: qsTr("Batt1 monitor")
+            valueText: _batt1Monitor.enumStringValue
         }
 
         VehicleSummaryRow {
-            labelText: "Battery capacity:"
-            valueText: battCapacity.valueString
+            labelText: qsTr("Batt1 capacity")
+            valueText:  _batt1MonitorEnabled ? _battCapacity.valueString + " " + _battCapacity.units : ""
+            visible:    _batt1MonitorEnabled
+        }
+
+        VehicleSummaryRow {
+            labelText:  qsTr("Batt2 monitor")
+            valueText:  _batt2MonitorAvailable ? _batt2Monitor.enumStringValue : ""
+            visible:    _batt2MonitorAvailable
+        }
+
+        VehicleSummaryRow {
+            labelText:  qsTr("Batt2 capacity")
+            valueText:  _batt2MonitorEnabled ? _batt2Capacity.valueString + " " + _batt2Capacity.units : ""
+            visible:    _batt2MonitorEnabled
         }
     }
 }

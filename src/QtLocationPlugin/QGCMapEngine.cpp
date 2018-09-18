@@ -1,25 +1,12 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-QGroundControl Open Source Ground Control Station
-
-(c) 2009, 2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
-This file is part of the QGROUNDCONTROL project
-
-    QGROUNDCONTROL is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    QGROUNDCONTROL is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
-======================================================================*/
 
 /**
  * @file
@@ -28,6 +15,9 @@ This file is part of the QGROUNDCONTROL project
  *   @author Gus Grubba <mavlink@grubba.com>
  *
  */
+#include "QGCApplication.h"
+#include "AppSettings.h"
+#include "SettingsManager.h"
 
 #include <math.h>
 #include <QSettings>
@@ -45,7 +35,7 @@ Q_DECLARE_METATYPE(QList<QGCTile*>)
 static const char* kDbFileName = "qgcMapCache.db";
 static QLocale kLocale;
 
-#define CACHE_PATH_VERSION  "100"
+#define CACHE_PATH_VERSION  "300"
 
 struct stQGeoTileCacheQGCMapTypes {
     const char* name;
@@ -56,41 +46,62 @@ struct stQGeoTileCacheQGCMapTypes {
 //   Changes here must reflect those in QGeoTiledMappingManagerEngineQGC.cpp
 
 stQGeoTileCacheQGCMapTypes kMapTypes[] = {
+#ifndef QGC_LIMITED_MAPS
     {"Google Street Map",       UrlFactory::GoogleMap},
     {"Google Satellite Map",    UrlFactory::GoogleSatellite},
     {"Google Terrain Map",      UrlFactory::GoogleTerrain},
+#endif
     {"Bing Street Map",         UrlFactory::BingMap},
     {"Bing Satellite Map",      UrlFactory::BingSatellite},
     {"Bing Hybrid Map",         UrlFactory::BingHybrid},
+    {"Statkart Terrain Map",    UrlFactory::StatkartTopo},
+    {"ENIRO Terrain Map",       UrlFactory::EniroTopo},
+
+    {"VWorld Satellite Map",     UrlFactory::VWorldSatellite},
+    {"VWorld Street Map",        UrlFactory::VWorldStreet}
+
+    /*
     {"MapQuest Street Map",     UrlFactory::MapQuestMap},
     {"MapQuest Satellite Map",  UrlFactory::MapQuestSat}
-    /*
     {"Open Street Map",         UrlFactory::OpenStreetMap}
      */
 };
 
 #define NUM_MAPS (sizeof(kMapTypes) / sizeof(stQGeoTileCacheQGCMapTypes))
 
-stQGeoTileCacheQGCMapTypes kMapBoxTypes[] = {
-    {"MapBox Street Map",       UrlFactory::MapBoxStreets},
-    {"MapBox Satellite Map",    UrlFactory::MapBoxSatellite},
-    {"MapBox High Contrast Map",UrlFactory::MapBoxHighContrast},
-    {"MapBox Light Map",        UrlFactory::MapBoxLight},
-    {"MapBox Dark Map",         UrlFactory::MapBoxDark},
-    {"MapBox Hybrid Map",       UrlFactory::MapBoxHybrid},
-    {"MapBox Wheat Paste Map",  UrlFactory::MapBoxWheatPaste},
-    {"MapBox Streets Basic Map",UrlFactory::MapBoxStreetsBasic},
-    {"MapBox Comic Map",        UrlFactory::MapBoxComic},
-    {"MapBox Outdoors Map",     UrlFactory::MapBoxOutdoors},
-    {"MapBox Run, Byke and Hike Map",   UrlFactory::MapBoxRunBikeHike},
-    {"MapBox Pencil Map",       UrlFactory::MapBoxPencil},
-    {"MapBox Pirates Map",      UrlFactory::MapBoxPirates},
-    {"MapBox Emerald Map",      UrlFactory::MapBoxEmerald}
+stQGeoTileCacheQGCMapTypes kMapboxTypes[] = {
+    {"Mapbox Street Map",       UrlFactory::MapboxStreets},
+    {"Mapbox Satellite Map",    UrlFactory::MapboxSatellite},
+    {"Mapbox High Contrast Map",UrlFactory::MapboxHighContrast},
+    {"Mapbox Light Map",        UrlFactory::MapboxLight},
+    {"Mapbox Dark Map",         UrlFactory::MapboxDark},
+    {"Mapbox Hybrid Map",       UrlFactory::MapboxHybrid},
+    {"Mapbox Wheat Paste Map",  UrlFactory::MapboxWheatPaste},
+    {"Mapbox Streets Basic Map",UrlFactory::MapboxStreetsBasic},
+    {"Mapbox Comic Map",        UrlFactory::MapboxComic},
+    {"Mapbox Outdoors Map",     UrlFactory::MapboxOutdoors},
+    {"Mapbox Run, Byke and Hike Map",   UrlFactory::MapboxRunBikeHike},
+    {"Mapbox Pencil Map",       UrlFactory::MapboxPencil},
+    {"Mapbox Pirates Map",      UrlFactory::MapboxPirates},
+    {"Mapbox Emerald Map",      UrlFactory::MapboxEmerald}
 };
 
-#define NUM_MAPBOXMAPS (sizeof(kMapBoxTypes) / sizeof(stQGeoTileCacheQGCMapTypes))
+#define NUM_MAPBOXMAPS (sizeof(kMapboxTypes) / sizeof(stQGeoTileCacheQGCMapTypes))
 
-static const char* kMapBoxTokenKey  = "MapBoxToken";
+stQGeoTileCacheQGCMapTypes kEsriTypes[] = {
+    {"Esri Street Map",       UrlFactory::EsriWorldStreet},
+    {"Esri Satellite Map",    UrlFactory::EsriWorldSatellite},
+    {"Esri Terrain Map",      UrlFactory::EsriTerrain}
+};
+
+#define NUM_ESRIMAPS (sizeof(kEsriTypes) / sizeof(stQGeoTileCacheQGCMapTypes))
+
+stQGeoTileCacheQGCMapTypes kElevationTypes[] = {
+    {"Airmap Elevation Data", UrlFactory::AirmapElevation}
+};
+
+#define NUM_ELEVMAPS (sizeof(kElevationTypes) / sizeof(stQGeoTileCacheQGCMapTypes))
+
 static const char* kMaxDiskCacheKey = "MaxDiskCache";
 static const char* kMaxMemCacheKey  = "MaxMemoryCache";
 
@@ -104,6 +115,9 @@ getQGCMapEngine()
         kMapEngine = new QGCMapEngine();
     return kMapEngine;
 }
+
+//-----------------------------------------------------------------------------
+const double QGCMapEngine::srtm1TileSize = 0.01;
 
 //-----------------------------------------------------------------------------
 void
@@ -139,11 +153,14 @@ QGCMapEngine::QGCMapEngine()
     , _maxDiskCache(0)
     , _maxMemCache(0)
     , _prunning(false)
+    , _cacheWasReset(false)
+    , _isInternetActive(false)
 {
     qRegisterMetaType<QGCMapTask::TaskType>();
     qRegisterMetaType<QGCTile>();
     qRegisterMetaType<QList<QGCTile*>>();
-    connect(&_worker, &QGCCacheWorker::updateTotals, this, &QGCMapEngine::_updateTotals);
+    connect(&_worker, &QGCCacheWorker::updateTotals,   this, &QGCMapEngine::_updateTotals);
+    connect(&_worker, &QGCCacheWorker::internetStatus, this, &QGCMapEngine::_internetStatus);
 }
 
 //-----------------------------------------------------------------------------
@@ -157,24 +174,49 @@ QGCMapEngine::~QGCMapEngine()
 
 //-----------------------------------------------------------------------------
 void
+QGCMapEngine::_checkWipeDirectory(const QString& dirPath)
+{
+    QDir dir(dirPath);
+    if (dir.exists(dirPath)) {
+        _cacheWasReset = true;
+        _wipeDirectory(dirPath);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCMapEngine::_wipeOldCaches()
+{
+    QString oldCacheDir;
+#ifdef __mobile__
+    oldCacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)      + QLatin1String("/QGCMapCache55");
+#else
+    oldCacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/QGCMapCache55");
+#endif
+    _checkWipeDirectory(oldCacheDir);
+#ifdef __mobile__
+    oldCacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)      + QLatin1String("/QGCMapCache100");
+#else
+    oldCacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/QGCMapCache100");
+#endif
+    _checkWipeDirectory(oldCacheDir);
+}
+
+//-----------------------------------------------------------------------------
+void
 QGCMapEngine::init()
 {
-    //-- Delete old style cache (if present)
-#ifdef __mobile__
-    QString oldCacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)      + QLatin1String("/QGCMapCache55");
-#else
-    QString oldCacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QLatin1String("/QGCMapCache55");
-#endif
-    _wipeDirectory(oldCacheDir);
+    //-- Delete old style caches (if present)
+    _wipeOldCaches();
     //-- Figure out cache path
 #ifdef __mobile__
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)      + QLatin1String("/QGCMapCache" CACHE_PATH_VERSION);
 #else
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QLatin1String("/QGCMapCache" CACHE_PATH_VERSION);
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/QGCMapCache" CACHE_PATH_VERSION);
 #endif
     if(!QDir::root().mkpath(cacheDir)) {
         qWarning() << "Could not create mapping disk cache directory: " << cacheDir;
-        cacheDir = QDir::homePath() + QLatin1String("/.qgcmapscache/");
+        cacheDir = QDir::homePath() + QStringLiteral("/.qgcmapscache/");
         if(!QDir::root().mkpath(cacheDir)) {
             qWarning() << "Could not create mapping disk cache directory: " << cacheDir;
             cacheDir.clear();
@@ -266,12 +308,19 @@ QGCTileSet
 QGCMapEngine::getTileCount(int zoom, double topleftLon, double topleftLat, double bottomRightLon, double bottomRightLat, UrlFactory::MapType mapType)
 {
     if(zoom <  1) zoom = 1;
-    if(zoom > 18) zoom = 18;
+    if(zoom > MAX_MAP_ZOOM) zoom = MAX_MAP_ZOOM;
     QGCTileSet set;
-    set.tileX0 = long2tileX(topleftLon,     zoom);
-    set.tileY0 = lat2tileY(topleftLat,      zoom);
-    set.tileX1 = long2tileX(bottomRightLon, zoom);
-    set.tileY1 = lat2tileY(bottomRightLat,  zoom);
+    if (mapType != UrlFactory::AirmapElevation) {
+        set.tileX0 = long2tileX(topleftLon,     zoom);
+        set.tileY0 = lat2tileY(topleftLat,      zoom);
+        set.tileX1 = long2tileX(bottomRightLon, zoom);
+        set.tileY1 = lat2tileY(bottomRightLat,  zoom);
+    } else {
+        set.tileX0 = long2elevationTileX(topleftLon,        zoom);
+        set.tileY0 = lat2elevationTileY(bottomRightLat,     zoom);
+        set.tileX1 = long2elevationTileX(bottomRightLon,    zoom);
+        set.tileY1 = lat2elevationTileY(topleftLat,         zoom);
+    }
     set.tileCount = (quint64)((quint64)set.tileX1 - (quint64)set.tileX0 + 1) * (quint64)((quint64)set.tileY1 - (quint64)set.tileY0 + 1);
     set.tileSize  = UrlFactory::averageSizeForType(mapType) * set.tileCount;
     return set;
@@ -292,6 +341,22 @@ QGCMapEngine::lat2tileY(double lat, int z)
 }
 
 //-----------------------------------------------------------------------------
+int
+QGCMapEngine::long2elevationTileX(double lon, int z)
+{
+    Q_UNUSED(z);
+    return (int)(floor((lon + 180.0) / srtm1TileSize));
+}
+
+//-----------------------------------------------------------------------------
+int
+QGCMapEngine::lat2elevationTileY(double lat, int z)
+{
+    Q_UNUSED(z);
+    return (int)(floor((lat + 90.0) / srtm1TileSize));
+}
+
+//-----------------------------------------------------------------------------
 UrlFactory::MapType
 QGCMapEngine::getTypeFromName(const QString& name)
 {
@@ -301,8 +366,16 @@ QGCMapEngine::getTypeFromName(const QString& name)
             return kMapTypes[i].type;
     }
     for(i = 0; i < NUM_MAPBOXMAPS; i++) {
-        if(name.compare(kMapBoxTypes[i].name, Qt::CaseInsensitive) == 0)
-            return kMapBoxTypes[i].type;
+        if(name.compare(kMapboxTypes[i].name, Qt::CaseInsensitive) == 0)
+            return kMapboxTypes[i].type;
+    }
+    for(i = 0; i < NUM_ESRIMAPS; i++) {
+        if(name.compare(kEsriTypes[i].name, Qt::CaseInsensitive) == 0)
+            return kEsriTypes[i].type;
+    }
+    for(i = 0; i < NUM_ELEVMAPS; i++) {
+        if(name.compare(kElevationTypes[i].name, Qt::CaseInsensitive) == 0)
+            return kElevationTypes[i].type;
     }
     return UrlFactory::Invalid;
 }
@@ -315,32 +388,17 @@ QGCMapEngine::getMapNameList()
     for(size_t i = 0; i < NUM_MAPS; i++) {
         mapList << kMapTypes[i].name;
     }
-    if(!getMapBoxToken().isEmpty()) {
+    if(!qgcApp()->toolbox()->settingsManager()->appSettings()->mapboxToken()->rawValue().toString().isEmpty()) {
         for(size_t i = 0; i < NUM_MAPBOXMAPS; i++) {
-            mapList << kMapBoxTypes[i].name;
+            mapList << kMapboxTypes[i].name;
+        }
+    }
+    if(!qgcApp()->toolbox()->settingsManager()->appSettings()->esriToken()->rawValue().toString().isEmpty()) {
+        for(size_t i = 0; i < NUM_ESRIMAPS; i++) {
+            mapList << kEsriTypes[i].name;
         }
     }
     return mapList;
-}
-
-//-----------------------------------------------------------------------------
-void
-QGCMapEngine::setMapBoxToken(const QString& token)
-{
-    QSettings settings;
-    settings.setValue(kMapBoxTokenKey, token);
-    _mapBoxToken = token;
-}
-
-//-----------------------------------------------------------------------------
-QString
-QGCMapEngine::getMapBoxToken()
-{
-    if(_mapBoxToken.isEmpty()) {
-        QSettings settings;
-        _mapBoxToken = settings.value(kMapBoxTokenKey).toString();
-    }
-    return _mapBoxToken;
 }
 
 //-----------------------------------------------------------------------------
@@ -375,6 +433,9 @@ QGCMapEngine::getMaxMemCache()
         _maxMemCache = settings.value(kMaxMemCacheKey, 128).toUInt();
 #endif
     }
+    //-- Size in MB
+    if(_maxMemCache > 1024)
+        _maxMemCache = 1024;
     return _maxMemCache;
 }
 
@@ -382,6 +443,9 @@ QGCMapEngine::getMaxMemCache()
 void
 QGCMapEngine::setMaxMemCache(quint32 size)
 {
+    //-- Size in MB
+    if(size > 1024)
+        size = 1024;
     QSettings settings;
     settings.setValue(kMaxMemCacheKey, size);
     _maxMemCache = size;
@@ -405,7 +469,7 @@ QGCMapEngine::bigSizeToString(quint64 size)
 
 //-----------------------------------------------------------------------------
 QString
-QGCMapEngine::numberToString(quint32 number)
+QGCMapEngine::numberToString(quint64 number)
 {
     return kLocale.toString(number);
 }
@@ -415,7 +479,7 @@ void
 QGCMapEngine::_updateTotals(quint32 totaltiles, quint64 totalsize, quint32 defaulttiles, quint64 defaultsize)
 {
     emit updateTotals(totaltiles, totalsize, defaulttiles, defaultsize);
-    quint64 maxSize = getMaxDiskCache() * 1024 * 1024;
+    quint64 maxSize = (quint64)getMaxDiskCache() * 1024L * 1024L;
     if(!_prunning && defaultsize > maxSize) {
         //-- Prune Disk Cache
         _prunning = true;
@@ -442,10 +506,21 @@ QGCMapEngine::concurrentDownloads(UrlFactory::MapType type)
     case UrlFactory::BingMap:
     case UrlFactory::BingSatellite:
     case UrlFactory::BingHybrid:
+    case UrlFactory::StatkartTopo:
+    case UrlFactory::EniroTopo:
+    case UrlFactory::EsriWorldStreet:
+    case UrlFactory::EsriWorldSatellite:
+    case UrlFactory::EsriTerrain:
+    case UrlFactory::AirmapElevation:
+    case UrlFactory::VWorldMap:
+    case UrlFactory::VWorldSatellite:
+    case UrlFactory::VWorldStreet:
         return 12;
+    /*
     case UrlFactory::MapQuestMap:
     case UrlFactory::MapQuestSat:
         return 8;
+    */
     default:
         break;
     }
@@ -458,6 +533,23 @@ QGCCreateTileSetTask::~QGCCreateTileSetTask()
     //-- If not sent out, delete it
     if(!_saved && _tileSet)
         delete _tileSet;
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCMapEngine::testInternet()
+{
+    getQGCMapEngine()->addTask(new QGCTestInternetTask());
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCMapEngine::_internetStatus(bool active)
+{
+    if(_isInternetActive != active) {
+        _isInternetActive = active;
+        emit internetUpdated();
+    }
 }
 
 // Resolution math: https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Resolution_and_Scale

@@ -56,9 +56,13 @@ thirdParty/qserialport/lib/
 libs/thirdParty/libxbee/lib/
 GeneratedFiles/
 gstreamer-1.0-android*
+src/Airmap/Airmap_api_key.h
 
 *.autosave
 .settings/
+
+# iOS Generated files
+ios/iOSForAppStore-Info.plist
 
 # Generated files
 moc_*
@@ -76,3 +80,9 @@ android/gradle.properties
 # doxygen
 src/html/
 src/latex/
+
+# vagrant
+.vagrant/
+Qt*-linux*.tar.*
+
+libs/airmapd/include/boost

@@ -1,25 +1,12 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-QGroundControl Open Source Ground Control Station
-
-(c) 2009 - 2011 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
-This file is part of the QGROUNDCONTROL project
-
-    QGROUNDCONTROL is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    QGROUNDCONTROL is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
-======================================================================*/
 
 /**
  * @file
@@ -99,6 +86,7 @@ public:
     /// From LinkConfiguration
     LinkType    type            () { return LinkConfiguration::TypeSerial; }
     void        copyFrom        (LinkConfiguration* source);
+    bool        isHighLatencyAllowed () { return true; }
     void        loadSettings    (QSettings& settings, const QString& root);
     void        saveSettings    (QSettings& settings, const QString& root);
     void        updateSettings  ();
@@ -146,11 +134,11 @@ class SerialLink : public LinkInterface
 public:
     // LinkInterface
 
-    LinkConfiguration* getLinkConfiguration();
     QString getName() const;
     void    requestReset();
     bool    isConnected() const;
     qint64  getConnectionSpeed() const;
+    SerialConfiguration* getSerialConfig() const { return _serialConfig; }
 
     // These are left unimplemented in order to cause linker errors which indicate incorrect usage of
     // connect/disconnect on link directly. All connect/disconnect calls should be made through LinkManager.
@@ -181,7 +169,7 @@ private slots:
 
 private:
     // Links are only created/destroyed by LinkManager so constructor/destructor is not public
-    SerialLink(SerialConfiguration* config);
+    SerialLink(SharedLinkConfigurationPointer& config, bool isPX4Flow = false);
     ~SerialLink();
 
     // From LinkInterface
@@ -199,7 +187,7 @@ private:
     volatile bool        _reqReset;
     QMutex               _stoppMutex;      // Mutex for accessing _stopp
     QByteArray           _transmitBuffer;  // An internal buffer for receiving data from member functions and actually transmitting them via the serial port.
-    SerialConfiguration* _config;
+    SerialConfiguration* _serialConfig;
 
 signals:
     void aboutToCloseFlag();

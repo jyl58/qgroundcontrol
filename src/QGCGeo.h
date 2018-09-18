@@ -1,25 +1,12 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
- QGroundControl Open Source Ground Control Station
-
- (c) 2009 - 2014 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
- This file is part of the QGROUNDCONTROL project
-
- QGROUNDCONTROL is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
-
- QGROUNDCONTROL is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-
- You should have received a copy of the GNU General Public License
- along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
- ======================================================================*/
 
 /// @file
 ///     @brief Coordinate transformation math functions.
@@ -32,11 +19,6 @@
 #define QGCGEO_H
 
 #include <QGeoCoordinate>
-
-/* Safeguard for systems lacking sincos (e.g. Mac OS X Leopard) */
-#ifndef sincos
-#define sincos(th,x,y) { (*(x))=sin(th); (*(y))=cos(th); }
-#endif
 
 /**
  * @brief Project a geodetic coordinate on to local tangential plane (LTP) as coordinate with East,
@@ -58,5 +40,45 @@ void convertGeoToNed(QGeoCoordinate coord, QGeoCoordinate origin, double* x, dou
  * @param[out] coord Geodetic coordinate to hold result.
  */
 void convertNedToGeo(double x, double y, double z, QGeoCoordinate origin, QGeoCoordinate *coord);
+
+// LatLonToUTMXY
+// Converts a latitude/longitude pair to x and y coordinates in the
+// Universal Transverse Mercator projection.
+//
+// Inputs:
+//   lat - Latitude of the point, in radians.
+//   lon - Longitude of the point, in radians.
+//   zone - UTM zone to be used for calculating values for x and y.
+//          If zone is less than 1 or greater than 60, the routine
+//          will determine the appropriate zone from the value of lon.
+//
+// Outputs:
+//   x - The x coordinate (easting) of the computed point. (in meters)
+//   y - The y coordinate (northing) of the computed point. (in meters)
+//
+// Returns:
+//   The UTM zone used for calculating the values of x and y.
+int convertGeoToUTM(const QGeoCoordinate& coord, double& easting, double& northing);
+
+// UTMXYToLatLon
+//
+// Converts x and y coordinates in the Universal Transverse Mercator//   The UTM zone parameter should be in the range [1,60].
+
+// projection to a latitude/longitude pair.
+//
+// Inputs:
+// x - The easting of the point, in meters.
+// y - The northing of the point, in meters.
+// zone - The UTM zone in which the point lies.
+// southhemi - True if the point is in the southern hemisphere;
+//               false otherwise.
+//
+// Outputs:
+// lat - The latitude of the point, in radians.
+// lon - The longitude of the point, in radians.
+//
+// Returns:
+// The function does not return a value.
+void convertUTMToGeo(double easting, double northing, int zone, bool southhemi, QGeoCoordinate& coord);
 
 #endif // QGCGEO_H

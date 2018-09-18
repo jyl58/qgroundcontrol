@@ -1,30 +1,19 @@
-/*=====================================================================
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
- QGroundControl Open Source Ground Control Station
-
- (c) 2009 - 2014 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
-
- This file is part of the QGROUNDCONTROL project
-
- QGROUNDCONTROL is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
-
- QGROUNDCONTROL is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-
- You should have received a copy of the GNU General Public License
- along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
-
- ======================================================================*/
+#include <QDebug>
 
 #include <cmath>
 #include <limits>
 
 #include "QGCGeo.h"
+#include "UTM.h"
 
 // These defines are private
 #define M_DEG_TO_RAD (M_PI / 180.0)
@@ -39,7 +28,13 @@
 
 static const float epsilon = std::numeric_limits<double>::epsilon();
 
-void convertGeoToNed(QGeoCoordinate coord, QGeoCoordinate origin, double* x, double* y, double* z) {
+void convertGeoToNed(QGeoCoordinate coord, QGeoCoordinate origin, double* x, double* y, double* z)
+{
+    if (coord == origin) {
+        // Short circuit to prevent NaNs in calculation
+        *x = *y = *z = 0;
+        return;
+    }
 
     double lat_rad = coord.latitude() * M_DEG_TO_RAD;
     double lon_rad = coord.longitude() * M_DEG_TO_RAD;
@@ -94,3 +89,16 @@ void convertNedToGeo(double x, double y, double z, QGeoCoordinate origin, QGeoCo
     coord->setAltitude(-z + origin.altitude());
 }
 
+int convertGeoToUTM(const QGeoCoordinate& coord, double& easting, double& northing)
+{
+    return LatLonToUTMXY(coord.latitude(), coord.longitude(), -1 /* zone */, easting, northing);
+}
+
+void convertUTMToGeo(double easting, double northing, int zone, bool southhemi, QGeoCoordinate& coord)
+{
+    double latRadians, lonRadians;
+
+    UTMXYToLatLon (easting, northing, zone, southhemi, latRadians, lonRadians);
+    coord.setLatitude(RadToDeg(latRadians));
+    coord.setLongitude(RadToDeg(lonRadians));
+}

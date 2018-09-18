@@ -1,127 +1,121 @@
-/*=====================================================================
-
- QGroundControl Open Source Ground Control Station
- 
- (c) 2009 - 2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- 
- This file is part of the QGROUNDCONTROL project
- 
- QGROUNDCONTROL is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
- 
- QGROUNDCONTROL is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
- 
- You should have received a copy of the GNU General Public License
- along with QGROUNDCONTROL. If not, see <http://www.gnu.org/licenses/>.
- 
- ======================================================================*/
+/****************************************************************************
+ *
+ *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
 #include <QElapsedTimer>
 #include <cmath>
 
 #include "MultiVehicleManager.h"
-#include "PX4FirmwarePlugin.h"
+#include "FirmwarePlugin.h"
 #include "MAVLinkProtocol.h"
 #include "FollowMe.h"
 #include "Vehicle.h"
+#include "PositionManager.h"
+#include "SettingsManager.h"
+#include "AppSettings.h"
 
-#ifdef QT_QML_DEBUG
-FollowMe::simulated_motion_s FollowMe::_simulated_motion[4] = {{0,500},{500,0},{0, -500},{-500, 0}};
-#endif
-
-FollowMe::FollowMe(QGCApplication* app)
-    : QGCTool(app),
-      _followMeStr(PX4FirmwarePlugin::followMeFlightMode)
+FollowMe::FollowMe(QGCApplication* app, QGCToolbox* toolbox)
+    : QGCTool(app, toolbox), estimatation_capabilities(0)
 {
-
-#ifdef QT_QML_DEBUG
-    _simulate_motion_timer = 0;
-    _simulate_motion_index = 0;
-    _simulate_motion = false;
-#endif
-
     memset(&_motionReport, 0, sizeof(motionReport_s));
-
-    // set up the QT position connection slot
-
-    _locationInfo = QGeoPositionInfoSource::createDefaultSource(this);
-
-    if(_locationInfo != 0) {
-
-        _locationInfo->setPreferredPositioningMethods(QGeoPositionInfoSource::SatellitePositioningMethods);
-        _locationInfo->setUpdateInterval(_locationInfo->minimumUpdateInterval());
-        connect(_locationInfo, SIGNAL(positionUpdated(QGeoPositionInfo)), this, SLOT(_setGPSLocation(QGeoPositionInfo)));
-
-        // set up the mavlink motion report timer`
-
-        _gcsMotionReportTimer.setInterval(_locationInfo->minimumUpdateInterval());
-        _gcsMotionReportTimer.setSingleShot(false);
-        connect(&_gcsMotionReportTimer, &QTimer::timeout, this, &FollowMe::_sendGCSMotionReport);
-
-        runTime.start();
-    }
+    runTime.start();
+    _gcsMotionReportTimer.setSingleShot(false);
 }
 
-FollowMe::~FollowMe()
+void FollowMe::setToolbox(QGCToolbox* toolbox)
 {
-    disable();
+    QGCTool::setToolbox(toolbox);
+    connect(&_gcsMotionReportTimer, &QTimer::timeout, this, &FollowMe::_sendGCSMotionReport);
+    connect(toolbox->settingsManager()->appSettings()->followTarget(), &Fact::rawValueChanged, this, &FollowMe::_settingsChanged);
+    _currentMode = _toolbox->settingsManager()->appSettings()->followTarget()->rawValue().toUInt();
+    if(_currentMode == MODE_ALWAYS) {
+        _enable();
+    }
 }
 
 void FollowMe::followMeHandleManager(const QString&)
 {
-    QmlObjectListModel & vehicles = *_toolbox->multiVehicleManager()->vehicles();
+    //-- If we are to change based on current flight mode
+    if(_currentMode == MODE_FOLLOWME) {
+        QmlObjectListModel & vehicles = *_toolbox->multiVehicleManager()->vehicles();
+        for (int i=0; i< vehicles.count(); i++) {
+            Vehicle* vehicle = qobject_cast<Vehicle*>(vehicles[i]);
+            if (vehicle->px4Firmware() && vehicle->flightMode().compare(FirmwarePlugin::px4FollowMeFlightMode, Qt::CaseInsensitive) == 0) {
+                _enable();
+                return;
+            }
+        }
+        _disable();
+    }
+}
 
-    for (int i=0; i< vehicles.count(); i++) {
-        Vehicle* vehicle = qobject_cast<Vehicle*>(vehicles[i]);
-        if(vehicle->flightMode().compare(_followMeStr, Qt::CaseInsensitive) == 0) {
-            enable();
-            return;
+void FollowMe::_settingsChanged()
+{
+    uint32_t mode = _toolbox->settingsManager()->appSettings()->followTarget()->rawValue().toUInt();
+    if(_currentMode != mode) {
+        _currentMode = mode;
+        switch (mode) {
+        case MODE_NEVER:
+            if(_gcsMotionReportTimer.isActive()) {
+                _disable();
+            }
+            break;
+        case MODE_ALWAYS:
+            if(!_gcsMotionReportTimer.isActive()) {
+                _enable();
+            }
+            break;
+        case MODE_FOLLOWME:
+            if(!_gcsMotionReportTimer.isActive()) {
+                followMeHandleManager(QString());
+            }
+            break;
+        default:
+            break;
         }
     }
-
-    disable();
 }
 
-void FollowMe::enable()
+void FollowMe::_enable()
 {
-    if(_locationInfo != 0) {
-        _locationInfo->startUpdates();
-        _gcsMotionReportTimer.start();
-    }
+    connect(_toolbox->qgcPositionManager(),
+            &QGCPositionManager::positionInfoUpdated,
+            this,
+            &FollowMe::_setGPSLocation);
+    _gcsMotionReportTimer.setInterval(_toolbox->qgcPositionManager()->updateInterval());
+    _gcsMotionReportTimer.start();
 }
 
-void FollowMe::disable()
+void FollowMe::_disable()
 {
-    if(_locationInfo != 0) {
-        _locationInfo->stopUpdates();
-        _gcsMotionReportTimer.stop();
-    }
+    disconnect(_toolbox->qgcPositionManager(),
+               &QGCPositionManager::positionInfoUpdated,
+               this,
+               &FollowMe::_setGPSLocation);
+    _gcsMotionReportTimer.stop();
 }
 
 void FollowMe::_setGPSLocation(QGeoPositionInfo geoPositionInfo)
 {
-    if (geoPositionInfo.isValid())
-    {
+    if (!geoPositionInfo.isValid()) {
+        //-- Invalidate cached coordinates
+        memset(&_motionReport, 0, sizeof(motionReport_s));
+    } else {
         // get the current location coordinates
 
         QGeoCoordinate geoCoordinate = geoPositionInfo.coordinate();
 
-        _motionReport.lat_int = geoCoordinate.latitude()*1e7;
-        _motionReport.lon_int = geoCoordinate.longitude()*1e7;
-        _motionReport.alt = geoCoordinate.altitude();
+        _motionReport.lat_int = geoCoordinate.latitude()  * 1e7;
+        _motionReport.lon_int = geoCoordinate.longitude() * 1e7;
+        _motionReport.alt     = geoCoordinate.altitude();
 
-#ifdef QT_QML_DEBUG
-        if(_simulate_motion == true) {
-            _motionReport.lat_int = 47.3977420*1e7;
-            _motionReport.lon_int = 8.5455941*1e7;
-            _motionReport.alt = 488.00;
-        }
-#endif
+        estimatation_capabilities |= (1 << POS);
+
         // get the current eph and epv
 
         if(geoPositionInfo.hasAttribute(QGeoPositionInfo::HorizontalAccuracy) == true) {
@@ -130,59 +124,67 @@ void FollowMe::_setGPSLocation(QGeoPositionInfo geoPositionInfo)
 
         if(geoPositionInfo.hasAttribute(QGeoPositionInfo::VerticalAccuracy) == true) {
             _motionReport.pos_std_dev[2] = geoPositionInfo.attribute(QGeoPositionInfo::VerticalAccuracy);
-        }
+        }                
 
-        // calculate z velocity if it's availible
+        // calculate z velocity if it's available
 
         if(geoPositionInfo.hasAttribute(QGeoPositionInfo::VerticalSpeed)) {
             _motionReport.vz = geoPositionInfo.attribute(QGeoPositionInfo::VerticalSpeed);
         }
 
-        // calculate x,y velocity if it's availible
+        // calculate x,y velocity if it's available
 
         if((geoPositionInfo.hasAttribute(QGeoPositionInfo::Direction)   == true) &&
            (geoPositionInfo.hasAttribute(QGeoPositionInfo::GroundSpeed) == true)) {
 
+            estimatation_capabilities |= (1 << VEL);
+
             qreal direction = _degreesToRadian(geoPositionInfo.attribute(QGeoPositionInfo::Direction));
-            qreal velocity = geoPositionInfo.attribute(QGeoPositionInfo::GroundSpeed);
+            qreal velocity  = geoPositionInfo.attribute(QGeoPositionInfo::GroundSpeed);
 
             _motionReport.vx = cos(direction)*velocity;
             _motionReport.vy = sin(direction)*velocity;
+
+        } else {
+            _motionReport.vx = 0.0f;
+            _motionReport.vy = 0.0f;
         }
     }
 }
 
-void FollowMe::_sendGCSMotionReport(void)
+void FollowMe::_sendGCSMotionReport()
 {
-    QmlObjectListModel & vehicles = *_toolbox->multiVehicleManager()->vehicles();
+
+    //-- Do we have any real data?
+    if(_motionReport.lat_int == 0 && _motionReport.lon_int == 0 && _motionReport.alt == 0) {
+        return;
+    }
+
+    QmlObjectListModel & vehicles    = *_toolbox->multiVehicleManager()->vehicles();
     MAVLinkProtocol* mavlinkProtocol = _toolbox->mavlinkProtocol();
     mavlink_follow_target_t follow_target;
+    memset(&follow_target, 0, sizeof(follow_target));
 
-    memset(&follow_target, 0, sizeof(mavlink_follow_target_t));
-
-    follow_target.timestamp = runTime.nsecsElapsed()*1e-6;
-    follow_target.est_capabilities = (1 << POS);
+    follow_target.timestamp = runTime.nsecsElapsed() * 1e-6;
+    follow_target.est_capabilities = estimatation_capabilities;
     follow_target.position_cov[0] = _motionReport.pos_std_dev[0];
     follow_target.position_cov[2] = _motionReport.pos_std_dev[2];
     follow_target.alt = _motionReport.alt;
     follow_target.lat = _motionReport.lat_int;
     follow_target.lon = _motionReport.lon_int;
-
-#ifdef QT_QML_DEBUG
-    if(_simulate_motion == true) {
-        _createSimulatedMotion(follow_target);
-    }
-#endif
+    follow_target.vel[0] = _motionReport.vx;
+    follow_target.vel[1] = _motionReport.vy;
 
     for (int i=0; i< vehicles.count(); i++) {
         Vehicle* vehicle = qobject_cast<Vehicle*>(vehicles[i]);
-        if(vehicle->flightMode().compare(_followMeStr, Qt::CaseInsensitive) == 0) {
+        if(_currentMode || vehicle->flightMode().compare(FirmwarePlugin::px4FollowMeFlightMode, Qt::CaseInsensitive) == 0) {
             mavlink_message_t message;
-            mavlink_msg_follow_target_encode(mavlinkProtocol->getSystemId(),
-                                             mavlinkProtocol->getComponentId(),
-                                             &message,
-                                             &follow_target);
-            vehicle->sendMessage(message);
+            mavlink_msg_follow_target_encode_chan(mavlinkProtocol->getSystemId(),
+                                                  mavlinkProtocol->getComponentId(),
+                                                  vehicle->priorityLink()->mavlinkChannel(),
+                                                  &message,
+                                                  &follow_target);
+            vehicle->sendMessageOnLink(vehicle->priorityLink(), message);
         }
     }
 }
@@ -191,28 +193,3 @@ double FollowMe::_degreesToRadian(double deg)
 {
     return deg * M_PI / 180.0;
 }
-
-#ifdef QT_QML_DEBUG
-void FollowMe::_createSimulatedMotion(mavlink_follow_target_t & follow_target)
-{
-    static int f_lon = 0;
-    static int f_lat = 0;
-    static float rot = 0;
-
-    rot += (float) .1;
-
-    if(!(_simulate_motion_timer++%50)) {
-        _simulate_motion_index++;
-        if(_simulate_motion_index > 3) {
-            _simulate_motion_index = 0;
-        }
-    }
-
-    f_lon = f_lon + _simulated_motion[_simulate_motion_index].lon*sin(rot);
-    f_lat = f_lat + _simulated_motion[_simulate_motion_index].lat;
-
-    follow_target.alt = _motionReport.alt;
-    follow_target.lat = _motionReport.lat_int + f_lon;
-    follow_target.lon = _motionReport.lon_int + f_lat;
-}
-#endif
