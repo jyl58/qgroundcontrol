@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -24,7 +24,6 @@ Rectangle {
     color:          qgcPal.window
     border.color:   _emergencyAction ? "red" : qgcPal.windowShade
     border.width:   _emergencyAction ? 4 : 1
-    z:              guidedController.z
     visible:        false
 
     property var    guidedController
@@ -34,16 +33,16 @@ Rectangle {
     property int    action
     property var    actionData
     property bool   hideTrigger:        false
+    property var    mapIndicator
+    property alias  optionText:         optionCheckBox.text
+    property alias  optionChecked:      optionCheckBox.checked
 
     property real _margins:         ScreenTools.defaultFontPixelWidth
     property bool _emergencyAction: action === guidedController.actionEmergencyStop
 
     onHideTriggerChanged: {
         if (hideTrigger) {
-            hideTrigger = false
-            altitudeSlider.visible = false
-            visibleTimer.stop()
-            visible = false
+            confirmCancelled()
         }
     }
 
@@ -54,6 +53,17 @@ Rectangle {
             // We delay showing the confirmation for a small amount in order to any other state
             // changes to propogate through the system. This way only the final state shows up.
             visibleTimer.restart()
+        }
+    }
+
+    function confirmCancelled() {
+        altitudeSlider.visible = false
+        visible = false
+        hideTrigger = false
+        visibleTimer.stop()
+        if (mapIndicator) {
+            mapIndicator.actionCancelled()
+            mapIndicator = undefined
         }
     }
 
@@ -92,6 +102,13 @@ Rectangle {
             wrapMode:               Text.WordWrap
         }
 
+        QGCCheckBox {
+            id:                         optionCheckBox
+            anchors.horizontalCenter:   parent.horizontalCenter
+            text:                       ""
+            visible:                    text !== ""
+        }
+
         // Action confirmation control
         SliderSwitch {
             id:             slider
@@ -106,13 +123,11 @@ Rectangle {
                     altitudeSlider.visible = false
                 }
                 hideTrigger = false
-                guidedController.executeAction(_root.action, _root.actionData, altitudeChange)
-            }
-
-            onReject: {
-                altitudeSlider.visible = false
-                _root.visible = false
-                hideTrigger = false
+                guidedController.executeAction(_root.action, _root.actionData, altitudeChange, _root.optionChecked)
+                if (mapIndicator) {
+                    mapIndicator.actionConfirmed()
+                    mapIndicator = undefined
+                }
             }
         }
     }
@@ -127,12 +142,10 @@ Rectangle {
         source:             "/res/XDelete.svg"
         fillMode:           Image.PreserveAspectFit
         color:              qgcPal.text
+
         QGCMouseArea {
             fillItem:   parent
-            onClicked: {
-                altitudeSlider.visible = false
-                _root.visible = false
-            }
+            onClicked:  confirmCancelled()
         }
     }
 }

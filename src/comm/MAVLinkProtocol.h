@@ -1,14 +1,13 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
  *
  ****************************************************************************/
 
-#ifndef MAVLINKPROTOCOL_H_
-#define MAVLINKPROTOCOL_H_
+#pragma once
 
 #include <QObject>
 #include <QMutex>
@@ -35,8 +34,7 @@ Q_DECLARE_LOGGING_CATEGORY(MAVLinkProtocolLog)
  * @brief MAVLink micro air vehicle protocol reference implementation.
  *
  * MAVLink is a generic communication protocol for micro air vehicles.
- * for more information, please see the official website.
- * @ref http://pixhawk.ethz.ch/software/mavlink/
+ * for more information, please see the official website: https://mavlink.io
  **/
 class MAVLinkProtocol : public QGCTool
 {
@@ -82,6 +80,9 @@ public:
 public slots:
     /** @brief Receive bytes from a communication interface */
     void receiveBytes(LinkInterface* link, QByteArray b);
+
+    /** @brief Log bytes sent from a communication interface */
+    void logSentBytes(LinkInterface* link, QByteArray b);
     
     /** @brief Set the system id of this application */
     void setSystemId(int id);
@@ -108,13 +109,13 @@ protected:
     uint64_t    totalLossCounter[MAVLINK_COMM_NUM_BUFFERS];     ///< Total messages lost during transmission.
     float       runningLossPercent[MAVLINK_COMM_NUM_BUFFERS];   ///< Loss rate
 
-    mavlink_message_t _message = {};
-    mavlink_status_t _status   = {};
+    mavlink_message_t _message;
+    mavlink_status_t _status;
 
     bool        versionMismatchIgnore;
     int         systemId;
     unsigned    _current_version;
-    unsigned    _radio_version_mismatch_count;
+    int         _radio_version_mismatch_count;
 
 signals:
     /// Heartbeat received on link
@@ -171,4 +172,3 @@ private:
     MultiVehicleManager*    _multiVehicleManager;
 };
 
-#endif // MAVLINKPROTOCOL_H_

@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -11,8 +11,7 @@
 /// @file
 ///     @author Lorenz Meier <mavteam@student.ethz.ch>
 
-#ifndef _LINKMANAGER_H_
-#define _LINKMANAGER_H_
+#pragma once
 
 #include <QList>
 #include <QMultiMap>
@@ -22,10 +21,10 @@
 #include "LinkInterface.h"
 #include "QGCLoggingCategory.h"
 #include "QGCToolbox.h"
-#include "ProtocolInterface.h"
 #include "MAVLinkProtocol.h"
 #if !defined(__mobile__)
 #include "LogReplayLink.h"
+#include "UdpIODevice.h"
 #endif
 #include "QmlObjectListModel.h"
 
@@ -43,8 +42,9 @@ Q_DECLARE_LOGGING_CATEGORY(LinkManagerVerboseLog)
 class QGCApplication;
 class UDPConfiguration;
 class AutoConnectSettings;
+class LogReplayLink;
 
-/// Manage communication links
+/// @brief Manage communication links
 ///
 /// The Link Manager organizes the physical Links. It can manage arbitrary
 /// links and takes care of connecting them as well assigning the correct
@@ -54,7 +54,7 @@ class LinkManager : public QGCTool
 {
     Q_OBJECT
 
-    /// Unit Test has access to private constructor/destructor
+    // Unit Test has access to private constructor/destructor
     friend class LinkManagerTest;
 
 public:
@@ -68,7 +68,7 @@ public:
     Q_PROPERTY(QStringList          serialPortStrings   READ serialPortStrings                                                  NOTIFY commPortStringsChanged)
     Q_PROPERTY(QStringList          serialPorts         READ serialPorts                                                        NOTIFY commPortsChanged)
 
-    // Create/Edit Link Configuration
+    /// Create/Edit Link Configuration
     Q_INVOKABLE LinkConfiguration*  createConfiguration         (int type, const QString& name);
     Q_INVOKABLE LinkConfiguration*  startConfigurationEditing   (LinkConfiguration* config);
     Q_INVOKABLE void                cancelConfigurationEditing  (LinkConfiguration* config) { delete config; }
@@ -112,6 +112,9 @@ public:
     /// Creates, connects (and adds) a link  based on the given configuration name.
     LinkInterface* createConnectedLink(const QString& name);
 
+    /// Returns pointer to the mavlink forwarding link, or nullptr if it does not exist
+    SharedLinkInterfacePointer mavlinkForwardingLink();
+
     /// Disconnects all existing links
     void disconnectAll(void);
 
@@ -128,6 +131,8 @@ public:
 
     // Called to signal app shutdown. Disconnects all links while turning off auto-connect.
     Q_INVOKABLE void shutdown(void);
+
+    Q_INVOKABLE LogReplayLink* startLogReplay(const QString& logFile);
 
 #ifdef QT_DEBUG
     // Only used by unit test tp restart after a shutdown
@@ -232,16 +237,19 @@ private:
     static const int    _activeLinkCheckTimeoutMSecs = 15000;   ///< Amount of time to wait for a heatbeat. Keep in mind ArduPilot stack heartbeat is slow to come.
 #endif
 
-    static const char*  _defaultUPDLinkName;
+    static const char*  _defaultUDPLinkName;
+    static const char*  _mavlinkForwardingLinkName;
     static const int    _autoconnectUpdateTimerMSecs;
     static const int    _autoconnectConnectDelayMSecs;
 
     // NMEA GPS device for GCS position
 #ifndef __mobile__
+#ifndef NO_SERIAL_LINK
     QString      _nmeaDeviceName;
     QSerialPort* _nmeaPort;
     uint32_t     _nmeaBaud;
+    UdpIODevice  _nmeaSocket;
+#endif
 #endif
 };
 
-#endif

@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -19,6 +19,13 @@ double QGCGeoBoundingCube::MaxWest   = -180.0;
 double QGCGeoBoundingCube::MaxEast   =  180.0;
 
 //-----------------------------------------------------------------------------
+QGCGeoBoundingCube::QGCGeoBoundingCube(QObject* parent)
+    : QObject(parent)
+{
+    reset();
+}
+
+//-----------------------------------------------------------------------------
 bool
 QGCGeoBoundingCube::isValid() const
 {
@@ -30,8 +37,8 @@ QGCGeoBoundingCube::isValid() const
 void
 QGCGeoBoundingCube::reset()
 {
-    pointSE = QGeoCoordinate();
-    pointNW = QGeoCoordinate();
+    pointNW = QGeoCoordinate(MaxSouth, MaxEast, MaxAlt);
+    pointSE = QGeoCoordinate(MaxNorth, MaxWest, MinAlt);
 }
 
 //-----------------------------------------------------------------------------

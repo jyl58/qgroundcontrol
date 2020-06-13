@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -17,56 +17,53 @@ import QGroundControl.FactSystem    1.0
 import QGroundControl.FlightMap     1.0
 import QGroundControl.Palette       1.0
 
-/// Instrument panel shown when virtual thumbsticks are visible
 Rectangle {
     id:             root
-    width:          getPreferredInstrumentWidth()
-    height:         _outerRadius * 2
+    height:         _outerRadius * 4 + _valuesWidget.height
     radius:         _outerRadius
     color:          qgcPal.window
-    border.width:   1
-    border.color:   _isSatellite ? qgcPal.mapWidgetBorderLight : qgcPal.mapWidgetBorderDark
 
-    property var    _qgcView:           qgcView
-    property real   _innerRadius:       (width - (_topBottomMargin * 3)) / 4
-    property real   _outerRadius:       _innerRadius + _topBottomMargin
-    property real   _defaultSize:       ScreenTools.defaultFontPixelHeight * (9)
-    property real   _sizeRatio:         ScreenTools.isTinyScreen ? (width / _defaultSize) * 0.5 : width / _defaultSize
-    property real   _bigFontSize:       ScreenTools.defaultFontPointSize * 2.5  * _sizeRatio
-    property real   _normalFontSize:    ScreenTools.defaultFontPointSize * 1.5  * _sizeRatio
-    property real   _labelFontSize:     ScreenTools.defaultFontPointSize * 0.75 * _sizeRatio
+    // These properties are expected to be in the Loader
+    //  property real maxHeight
+    //  property bool showValues - true: show value pages
+
+    property real   _innerRadius:       (width - (_topBottomMargin * 2)) / 2
+    property real   _outerRadius:       _innerRadius + _topBottomMargin * 2
     property real   _spacing:           ScreenTools.defaultFontPixelHeight * 0.33
     property real   _topBottomMargin:   (width * 0.05) / 2
-    property real   _availableValueHeight: maxHeight - (root.height + _valuesItem.anchors.topMargin)
-    property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
+    property real   _availableValueHeight: maxHeight - (attitude.height + compass.height)
+
+    // Prevent all clicks from going through to lower layers
+    DeadMouseArea {
+        anchors.fill: parent
+    }
 
     QGCPalette { id: qgcPal }
 
     QGCAttitudeWidget {
-        id:                 attitude
-        anchors.leftMargin: _topBottomMargin
-        anchors.left:       parent.left
-        size:               _innerRadius * 2
-        vehicle:            _activeVehicle
-        anchors.verticalCenter: parent.verticalCenter
-    }
-
-    QGCCompassWidget {
-        id:                 compass
-        anchors.leftMargin: _spacing
-        anchors.left:       attitude.right
-        size:               _innerRadius * 2
-        vehicle:            _activeVehicle
-        anchors.verticalCenter: parent.verticalCenter
+        id:                   attitude
+        anchors.topMargin :   _topBottomMargin
+        anchors.bottomMargin: _topBottomMargin
+        anchors.top:          parent.top
+        size:                 _innerRadius * 2
+        vehicle:              activeVehicle
+        anchors.horizontalCenter: parent.horizontalCenter
     }
 
     Item {
         id:                 _valuesItem
         anchors.topMargin:  ScreenTools.defaultFontPixelHeight / 4
-        anchors.top:        parent.bottom
+        anchors.bottomMargin:  ScreenTools.defaultFontPixelHeight / 4
+        anchors.top:        attitude.bottom
+        anchors.bottom:     compass.top
         width:              parent.width
         height:             _valuesWidget.height
-        visible:            widgetRoot.showValues
+        visible:            showValues
+
+        // Prevent all clicks from going through to lower layers
+        DeadMouseArea {
+            anchors.fill: parent
+        }
 
         Rectangle {
             anchors.fill:   _valuesWidget
@@ -78,8 +75,17 @@ Rectangle {
             anchors.margins:    1
             anchors.left:       parent.left
             anchors.right:      parent.right
-            qgcView:            root._qgcView
             maxHeight:          _availableValueHeight
         }
+    }
+
+    QGCCompassWidget {
+        id:                         compass
+        anchors.bottom :            parent.bottom
+        anchors.bottomMargin:       _topBottomMargin
+        anchors.topMargin:          _topBottomMargin
+        size:                       _innerRadius * 2
+        vehicle:                    activeVehicle
+        anchors.horizontalCenter:   parent.horizontalCenter
     }
 }

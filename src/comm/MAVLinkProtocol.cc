@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -53,6 +53,8 @@ const char* MAVLinkProtocol::_logFileExtension = "mavlink";             ///< Ext
 MAVLinkProtocol::MAVLinkProtocol(QGCApplication* app, QGCToolbox* toolbox)
     : QGCTool(app, toolbox)
     , m_enable_version_check(true)
+    , _message({})
+    , _status({})
     , versionMismatchIgnore(false)
     , systemId(255)
     , _current_version(100)
@@ -68,6 +70,8 @@ MAVLinkProtocol::MAVLinkProtocol(QGCApplication* app, QGCToolbox* toolbox)
     memset(totalLossCounter,    0, sizeof(totalLossCounter));
     memset(runningLossPercent,  0, sizeof(runningLossPercent));
     memset(firstMessage,        1, sizeof(firstMessage));
+    memset(&_status,            0, sizeof(_status));
+    memset(&_message,           0, sizeof(_message));
 }
 
 MAVLinkProtocol::~MAVLinkProtocol()
@@ -156,6 +160,38 @@ void MAVLinkProtocol::resetMetadataForLink(LinkInterface *link)
 }
 
 /**
+ * This method parses all outcoming bytes and log a MAVLink packet.
+ * @param link The interface to read from
+ * @see LinkInterface
+ **/
+
+void MAVLinkProtocol::logSentBytes(LinkInterface* link, QByteArray b){
+
+    uint8_t bytes_time[sizeof(quint64)];
+
+    Q_UNUSED(link);
+    if (!_logSuspendError && !_logSuspendReplay && _tempLogFile.isOpen()) {
+
+        quint64 time = static_cast<quint64>(QDateTime::currentMSecsSinceEpoch() * 1000);
+
+        qToBigEndian(time,bytes_time);
+
+        b.insert(0,QByteArray((const char*)bytes_time,sizeof(bytes_time)));
+
+        int len = b.count();
+
+        if(_tempLogFile.write(b) != len)
+        {
+            // If there's an error logging data, raise an alert and stop logging.
+            emit protocolStatusMessage(tr("MAVLink Protocol"), tr("MAVLink Logging failed. Could not write to file %1, logging disabled.").arg(_tempLogFile.fileName()));
+            _stopLogging();
+            _logSuspendError = true;
+        }
+    }
+
+}
+
+/**
  * This method parses all incoming bytes and constructs a MAVLink packet.
  * It can handle multiple links in parallel, as each link has it's own buffer/
  * parsing state machine.
@@ -233,6 +269,19 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
             //qDebug() << foo << _message.seq << expectedSeq << lastSeq << totalLossCounter[mavlinkChannel] << totalReceiveCounter[mavlinkChannel] << totalSentCounter[mavlinkChannel] << "(" << _message.sysid << _message.compid << ")";
 
             //-----------------------------------------------------------------
+            // MAVLink forwarding
+            bool forwardingEnabled = _app->toolbox()->settingsManager()->appSettings()->forwardMavlink()->rawValue().toBool();
+            if (forwardingEnabled) {
+                SharedLinkInterfacePointer forwardingLink = _linkMgr->mavlinkForwardingLink();
+
+                if (forwardingLink) {
+                    uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+                    int len = mavlink_msg_to_send_buffer(buf, &_message);
+                    forwardingLink->writeBytesSafe((const char*)buf, len);
+                }
+            }
+
+            //-----------------------------------------------------------------
             // Log data
             if (!_logSuspendError && !_logSuspendReplay && _tempLogFile.isOpen()) {
                 uint8_t buf[MAVLINK_MAX_PACKET_LEN+sizeof(quint64)];
@@ -283,12 +332,16 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
                 emit vehicleHeartbeatInfo(link, _message.sysid, _message.compid, highLatency2.autopilot, highLatency2.type);
             }
 
+#if 0
+            // Given the current state of SiK Radio firmwares there is no way to make the code below work.
+            // The ArduPilot implementation of SiK Radio firmware always sends MAVLINK_MSG_ID_RADIO_STATUS as a mavlink 1
+            // packet even if the vehicle is sending Mavlink 2.
+
             // Detect if we are talking to an old radio not supporting v2
             mavlink_status_t* mavlinkStatus = mavlink_get_channel_status(mavlinkChannel);
-            if (_message.msgid == MAVLINK_MSG_ID_RADIO_STATUS) {
+            if (_message.msgid == MAVLINK_MSG_ID_RADIO_STATUS && _radio_version_mismatch_count != -1) {
                 if ((mavlinkStatus->flags & MAVLINK_STATUS_FLAG_IN_MAVLINK1)
                 && !(mavlinkStatus->flags & MAVLINK_STATUS_FLAG_OUT_MAVLINK1)) {
-
                     _radio_version_mismatch_count++;
                 }
             }
@@ -296,12 +349,13 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
             if (_radio_version_mismatch_count == 5) {
                 // Warn the user if the radio continues to send v1 while the link uses v2
                 emit protocolStatusMessage(tr("MAVLink Protocol"), tr("Detected radio still using MAVLink v1.0 on a link with MAVLink v2.0 enabled. Please upgrade the radio firmware."));
-                // Ensure the warning can't get stuck
-                _radio_version_mismatch_count++;
+                // Set to flag warning already shown
+                _radio_version_mismatch_count = -1;
                 // Flick link back to v1
                 qDebug() << "Switching outbound to mavlink 1.0 due to incoming mavlink 1.0 packet:" << mavlinkStatus << mavlinkChannel << mavlinkStatus->flags;
                 mavlinkStatus->flags |= MAVLINK_STATUS_FLAG_OUT_MAVLINK1;
             }
+#endif
 
             // Update MAVLink status on every 32th packet
             if ((totalReceiveCounter[mavlinkChannel] & 0x1F) == 0) {
@@ -342,7 +396,7 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
  **/
 QString MAVLinkProtocol::getName()
 {
-    return QString(tr("MAVLink protocol"));
+    return tr("MAVLink protocol");
 }
 
 /** @return System id of this application */
@@ -359,7 +413,7 @@ void MAVLinkProtocol::setSystemId(int id)
 /** @return Component id of this application */
 int MAVLinkProtocol::getComponentId()
 {
-    return 0;
+    return MAV_COMP_ID_MISSIONPLANNER;
 }
 
 void MAVLinkProtocol::enableVersionCheck(bool enabled)
@@ -401,9 +455,13 @@ void MAVLinkProtocol::_startLogging(void)
     if (qgcApp()->runningUnitTests()) {
         return;
     }
+    AppSettings* appSettings = _app->toolbox()->settingsManager()->appSettings();
+    if(appSettings->disableAllPersistence()->rawValue().toBool()) {
+        return;
+    }
 #ifdef __mobile__
     //-- Mobile build don't write to /tmp unless told to do so
-    if (!_app->toolbox()->settingsManager()->appSettings()->telemetrySave()->rawValue().toBool()) {
+    if (!appSettings->telemetrySave()->rawValue().toBool()) {
         return;
     }
 #endif
@@ -432,7 +490,8 @@ void MAVLinkProtocol::_stopLogging(void)
     if (_tempLogFile.isOpen()) {
         if (_closeLogFile()) {
             if ((_vehicleWasArmed || _app->toolbox()->settingsManager()->appSettings()->telemetrySaveNotArmed()->rawValue().toBool()) &&
-                _app->toolbox()->settingsManager()->appSettings()->telemetrySave()->rawValue().toBool()) {
+                _app->toolbox()->settingsManager()->appSettings()->telemetrySave()->rawValue().toBool() &&
+                !_app->toolbox()->settingsManager()->appSettings()->disableAllPersistence()->rawValue().toBool()) {
                 emit saveTelemetryLog(_tempLogFile.fileName());
             } else {
                 QFile::remove(_tempLogFile.fileName());
@@ -453,7 +512,7 @@ void MAVLinkProtocol::checkForLostLogFiles(void)
     QFileInfoList fileInfoList = tempDir.entryInfoList(QStringList(filter), QDir::Files);
     //qDebug() << "Orphaned log file count" << fileInfoList.count();
 
-    foreach(const QFileInfo fileInfo, fileInfoList) {
+    for(const QFileInfo& fileInfo: fileInfoList) {
         //qDebug() << "Orphaned log file" << fileInfo.filePath();
         if (fileInfo.size() == 0) {
             // Delete all zero length files
@@ -476,7 +535,7 @@ void MAVLinkProtocol::deleteTempLogFiles(void)
     QString filter(QString("*.%1").arg(_logFileExtension));
     QFileInfoList fileInfoList = tempDir.entryInfoList(QStringList(filter), QDir::Files);
 
-    foreach(const QFileInfo fileInfo, fileInfoList) {
+    for(const QFileInfo fileInfo: fileInfoList) {
         QFile::remove(fileInfo.filePath());
     }
 }

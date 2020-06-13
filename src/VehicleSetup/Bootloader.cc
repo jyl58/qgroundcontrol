@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -18,7 +18,7 @@
 #include <QFile>
 #include <QSerialPortInfo>
 #include <QDebug>
-#include <QTime>
+#include <QElapsedTimer>
 
 #include "QGC.h"
 
@@ -54,9 +54,9 @@ bool Bootloader::_write(QSerialPort* port, const uint8_t byte)
 bool Bootloader::_read(QSerialPort* port, uint8_t* data, qint64 maxSize, int readTimeout)
 {
     qint64 bytesAlreadyRead = 0;
-    
+
     while (bytesAlreadyRead < maxSize) {
-        QTime timeout;
+        QElapsedTimer timeout;
         timeout.start();
         while (port->bytesAvailable() < 1) {
             if (timeout.elapsed() > readTimeout) {
@@ -184,7 +184,7 @@ bool Bootloader::_binProgram(QSerialPort* port, const FirmwareImage* image)
 {
     QFile firmwareFile(image->binFilename());
     if (!firmwareFile.open(QIODevice::ReadOnly)) {
-        _errorString = tr("Unable to open firmware file %1: %2").arg(image->binFilename()).arg(firmwareFile.errorString());
+        _errorString = tr("Unable to open firmware file %1: %2").arg(image->binFilename(), firmwareFile.errorString());
         return false;
     }
     uint32_t imageSize = (uint32_t)firmwareFile.size();
@@ -354,7 +354,7 @@ bool Bootloader::_binVerifyBytes(QSerialPort* port, const FirmwareImage* image)
     
     QFile firmwareFile(image->binFilename());
     if (!firmwareFile.open(QIODevice::ReadOnly)) {
-        _errorString = tr("Unable to open firmware file %1: %2").arg(image->binFilename()).arg(firmwareFile.errorString());
+        _errorString = tr("Unable to open firmware file %1: %2").arg(image->binFilename(), firmwareFile.errorString());
         return false;
     }
     uint32_t imageSize = (uint32_t)firmwareFile.size();
@@ -545,7 +545,7 @@ bool Bootloader::open(QSerialPort* port, const QString portName)
     port->setFlowControl(QSerialPort::NoFlowControl);
     
     if (!port->open(QIODevice::ReadWrite)) {
-        _errorString = tr("Open failed on port %1: %2").arg(portName).arg(port->errorString());
+        _errorString = tr("Open failed on port %1: %2").arg(portName, port->errorString());
         return false;
     }
     

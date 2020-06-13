@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -11,6 +11,7 @@
 #include "JsonHelper.h"
 #include "Vehicle.h"
 #include "CameraMetaData.h"
+#include "PlanMasterController.h"
 
 #include <QQmlEngine>
 
@@ -26,9 +27,8 @@ const char* CameraCalc::adjustedFootprintSideName =         "AdjustedFootprintSi
 
 const char* CameraCalc::_jsonCameraSpecTypeKey =            "CameraSpecType";
 
-CameraCalc::CameraCalc(Vehicle* vehicle, const QString& settingsGroup, QObject* parent)
+CameraCalc::CameraCalc(PlanMasterController* masterController, const QString& settingsGroup, QObject* parent)
     : CameraSpec                    (settingsGroup, parent)
-    , _vehicle                      (vehicle)
     , _dirty                        (false)
     , _disableRecalc                (false)
     , _distanceToSurfaceRelative    (true)
@@ -43,7 +43,7 @@ CameraCalc::CameraCalc(Vehicle* vehicle, const QString& settingsGroup, QObject* 
     , _adjustedFootprintFrontalFact (settingsGroup, _metaDataMap[adjustedFootprintFrontalName])
     , _imageFootprintSide           (0)
     , _imageFootprintFrontal        (0)
-    , _knownCameraList              (_vehicle->staticCameraList())
+    , _knownCameraList              (masterController->controllerVehicle()->staticCameraList())
 {
     QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
 
@@ -95,7 +95,7 @@ void CameraCalc::_cameraNameChanged(void)
 
     // Validate known camera name
     bool foundKnownCamera = false;
-    CameraMetaData* cameraMetaData = NULL;
+    CameraMetaData* cameraMetaData = nullptr;
     if (!isManualCamera() && !isCustomCamera()) {
         for (int cameraIndex=0; cameraIndex<_knownCameraList.count(); cameraIndex++) {
             cameraMetaData = _knownCameraList[cameraIndex].value<CameraMetaData*>();
@@ -127,8 +127,8 @@ void CameraCalc::_cameraNameChanged(void)
             // These values are unknown for these types
             fixedOrientation()->setRawValue(false);
             minTriggerInterval()->setRawValue(0);
-            if (isManualCamera()) {
-                valueSetIsDistance()->setRawValue(false);
+            if (isManualCamera() && !valueSetIsDistance()->rawValue().toBool()) {
+                valueSetIsDistance()->setRawValue(true);
             }
         } else {
             qWarning() << "Internal Error: Not known camera, but now manual or custom either";
@@ -205,7 +205,7 @@ bool CameraCalc::load(const QJsonObject& json, QString& errorString)
 {
     QJsonObject v1Json = json;
 
-    if (!v1Json.contains(JsonHelper::jsonVersionKey)) {
+    if (!json.contains(JsonHelper::jsonVersionKey)) {
         // Version 0 file. Differences from Version 1 for conversion:
         //  JsonHelper::jsonVersionKey not stored
         //  _jsonCameraSpecTypeKey stores CameraSpecType
@@ -231,7 +231,7 @@ bool CameraCalc::load(const QJsonObject& json, QString& errorString)
         { adjustedFootprintSideName,        QJsonValue::Double, true },
         { adjustedFootprintFrontalName,     QJsonValue::Double, true },
         { distanceToSurfaceName,            QJsonValue::Double, true },
-        { distanceToSurfaceRelativeName,    QJsonValue::Bool, true },
+        { distanceToSurfaceRelativeName,    QJsonValue::Bool,   true },
     };
     if (!JsonHelper::validateKeys(v1Json, keyInfoList1, errorString)) {
         return false;
@@ -239,12 +239,12 @@ bool CameraCalc::load(const QJsonObject& json, QString& errorString)
 
     _disableRecalc = true;
 
+    _distanceToSurfaceRelative = v1Json[distanceToSurfaceRelativeName].toBool();
+
     _cameraNameFact.setRawValue                 (v1Json[cameraNameName].toString());
     _adjustedFootprintSideFact.setRawValue      (v1Json[adjustedFootprintSideName].toDouble());
     _adjustedFootprintFrontalFact.setRawValue   (v1Json[adjustedFootprintFrontalName].toDouble());
     _distanceToSurfaceFact.setRawValue          (v1Json[distanceToSurfaceName].toDouble());
-
-    _distanceToSurfaceRelative = v1Json[distanceToSurfaceRelativeName].toBool();
 
     if (!isManualCamera()) {
         QList<JsonHelper::KeyValidateInfo> keyInfoList2 = {
@@ -254,16 +254,17 @@ bool CameraCalc::load(const QJsonObject& json, QString& errorString)
             { sideOverlapName,          QJsonValue::Double, true },
         };
         if (!JsonHelper::validateKeys(v1Json, keyInfoList2, errorString)) {
-            return false;
             _disableRecalc = false;
+            return false;
         }
 
         _valueSetIsDistanceFact.setRawValue (v1Json[valueSetIsDistanceName].toBool());
-        _imageDensityFact.setRawValue       (v1Json[imageDensityName].toDouble());
         _frontalOverlapFact.setRawValue     (v1Json[frontalOverlapName].toDouble());
         _sideOverlapFact.setRawValue        (v1Json[sideOverlapName].toDouble());
+        _imageDensityFact.setRawValue       (v1Json[imageDensityName].toDouble());
 
         if (!CameraSpec::load(v1Json, errorString)) {
+            _disableRecalc = false;
             return false;
         }
     }

@@ -1,3 +1,7 @@
+{
+    "version":      1,
+    "fileType":  "FactMetaData",
+    "QGC.MetaData.Facts":
 [
 {
     "name":             "CameraName",
@@ -18,7 +22,7 @@
     "min":              0.1,
     "units":            "m",
     "decimalPlaces":    2,
-    "defaultValue":     10.0
+    "defaultValue":     50.0
 },
 {
     "name":             "ImageDensity",
@@ -27,7 +31,7 @@
     "min":              0,
     "units":            "cm/px",
     "decimalPlaces":    1,
-    "defaultValue":     25
+    "defaultValue":     1.2
 },
 {
     "name":             "FrontalOverlap",
@@ -66,3 +70,4 @@
     "defaultValue":     25
 }
 ]
+}

@@ -1,3 +1,7 @@
+{
+    "version":      1,
+    "fileType":  "FactMetaData",
+    "QGC.MetaData.Facts":
 [
 {
     "name":             "LandingDistance",
@@ -20,7 +24,7 @@
 },
 {
     "name":             "LoiterAltitude",
-    "shortDescription": "Aircraft will proceed to the loiter point and loiter until it reaches this altitude. Once altitude is reached the aircraft will proceed to land.",
+    "shortDescription": "Aircraft will proceed to the loiter point and loiter downwards until it reaches this approach altitude. Once altitude is reached the aircraft will proceed to land.",
     "type":             "double",
     "units":            "m",
     "decimalPlaces":    1,
@@ -51,6 +55,25 @@
     "min":              0.1,
     "max":              90,
     "decimalPlaces":    1,
-    "defaultValue":     12.0
+    "defaultValue":     6.0
+},
+{
+    "name":             "ValueSetIsDistance",
+    "shortDescription": "Value controller loiter point is distance",
+    "type":             "bool",
+    "defaultValue":     false
+},
+{
+    "name":             "StopTakingPhotos",
+    "shortDescription": "Stop taking photos",
+    "type":             "bool",
+    "defaultValue":     true
+},
+{
+    "name":             "StopTakingVideo",
+    "shortDescription": "Stop taking video",
+    "type":             "bool",
+    "defaultValue":     true
 }
 ]
+}

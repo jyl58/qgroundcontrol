@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -25,8 +25,7 @@ PreFlightCheckButton {
 
     property int    failurePercent:                 40
     property bool   allowFailurePercentOverride:    false
-
-    property var _activeVehicle:        QGroundControl.multiVehicleManager.activeVehicle
-    property var _batPercentRemaining:  _activeVehicle ? _activeVehicle.battery.percentRemaining.value : 0
-    property bool _batLow:              _batPercentRemaining < failurePercent
+    property var    _batteryValue:                  activeVehicle ? activeVehicle.battery.percentRemaining.value : 0
+    property var    _batPercentRemaining:           isNaN(_batteryValue) ? 0 : _batteryValue
+    property bool   _batLow:                        _batPercentRemaining < failurePercent
 }

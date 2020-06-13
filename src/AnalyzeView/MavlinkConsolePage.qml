@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -27,6 +27,10 @@ AnalyzePage {
     pageDescription: qsTr("Mavlink Console provides a connection to the vehicle's system shell.")
 
     property bool isLoaded: false
+
+    MavlinkConsoleController {
+        id: conController
+    }
 
     Component {
         id: pageComponent
@@ -90,19 +94,31 @@ AnalyzePage {
                     id:               command
                     Layout.fillWidth: true
                     placeholderText:  "Enter Commands here..."
-                    onAccepted: {
+                    inputMethodHints: Qt.ImhNoAutoUppercase
+
+                    function sendCommand() {
                         conController.sendCommand(text)
                         text = ""
                     }
+                    onAccepted: sendCommand()
+
                     Keys.onPressed: {
-                        if (event.key == Qt.Key_Up) {
+                        if (event.key === Qt.Key_Up) {
                             text = conController.historyUp(text);
                             event.accepted = true;
-                        } else if (event.key == Qt.Key_Down) {
+                        } else if (event.key === Qt.Key_Down) {
                             text = conController.historyDown(text);
                             event.accepted = true;
                         }
                     }
+                }
+
+                QGCButton {
+                    id:        sendButton
+                    text:      qsTr("Send")
+                    visible:   ScreenTools.isMobile
+
+                    onClicked: command.sendCommand()
                 }
 
                 QGCButton {
